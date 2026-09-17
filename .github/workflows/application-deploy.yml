@@ -1,0 +1,31 @@
+name: Application CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test Web Application
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify index.html exists
+        run: test -f app/index.html
+
+      - name: Check HTML contains Innovatech
+        run: grep -q "Innovatech" app/index.html
+
+      - name: Check HTML contains title
+        run: grep -q "<title>" app/index.html
+
+      - name: Web content tests passed
+        run: echo "Web application tests passed successfully"
