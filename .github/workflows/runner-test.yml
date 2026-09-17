@@ -1,0 +1,30 @@
+name: Self-Hosted Runner Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-runner:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show runner information
+        run: |
+          echo "Hello from Innovatech self-hosted runner"
+          hostname
+          whoami
+
+      - name: Check Git
+        run: git --version
+
+      - name: Check Docker
+        run: docker --version
+
+      - name: Check Terraform
+        run: terraform --version
+
+      - name: Check AWS CLI
+        run: aws --version
