@@ -36,3 +36,19 @@ resource "aws_autoscaling_group" "web" {
     }
   }
 }
+
+resource "aws_autoscaling_policy" "web_cpu_target" {
+  name                   = "${var.project_name}-web-cpu-target"
+  autoscaling_group_name = aws_autoscaling_group.web.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+
+    target_value = 50.0
+  }
+
+  estimated_instance_warmup = 180
+}

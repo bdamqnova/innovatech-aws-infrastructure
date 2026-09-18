@@ -165,3 +165,40 @@ resource "aws_vpc_security_group_egress_rule" "db_outbound" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
 }
+
+# MONITORING PRIVATE SUBNET/ I need to learn this
+
+resource "aws_subnet" "monitoring_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.30.0/24"
+  availability_zone = data.aws_availability_zones.available.names[0]
+
+  tags = {
+    Name = "${var.project_name}-monitoring-a"
+  }
+}
+
+# Route table for the monitoring subnet
+
+resource "aws_route_table" "monitoring_private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-monitoring-private-rt"
+  }
+}
+
+# Allow monitoring EC2 to access the internet through NAT
+
+resource "aws_route" "monitoring_internet" {
+  route_table_id         = aws_route_table.monitoring_private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main.id
+}
+
+# Connect monitoring subnet to its route table
+
+resource "aws_route_table_association" "monitoring_a" {
+  subnet_id      = aws_subnet.monitoring_a.id
+  route_table_id = aws_route_table.monitoring_private.id
+}
