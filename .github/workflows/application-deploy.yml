@@ -6,8 +6,12 @@ on:
       - main
     paths:
       - "app/**"
+      - ".github/workflows/application-deploy.yml"
 
   workflow_dispatch:
+
+env:
+  AWS_DEFAULT_REGION: eu-central-1
 
 jobs:
   test:
@@ -29,3 +33,85 @@ jobs:
 
       - name: Web content tests passed
         run: echo "Web application tests passed successfully"
+
+  deploy:
+    name: Rolling Deployment
+    runs-on: self-hosted
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Find running web servers
+        id: web-servers
+        run: |
+          WEB_IDS=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=innovatech-web" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" \
+            --output text)
+
+          if [ -z "$WEB_IDS" ]; then
+            echo "No running web servers found"
+            exit 1
+          fi
+
+          echo "Web servers:"
+          echo "$WEB_IDS"
+
+          echo "web_ids=$WEB_IDS" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy application one server at a time
+        env:
+          WEB_IDS: ${{ steps.web-servers.outputs.web_ids }}
+        run: |
+          CONTENT=$(base64 -w 0 app/index.html)
+
+          for INSTANCE_ID in $WEB_IDS; do
+            echo "Deploying to $INSTANCE_ID"
+
+            PARAMETERS=$(jq -nc \
+              --arg content "$CONTENT" \
+              '{
+                commands: [
+                  "echo " + $content + " | base64 -d | sudo tee /opt/innovatech/index.html > /dev/null",
+                  "curl -fsS http://localhost/ > /dev/null"
+                ]
+              }')
+
+            COMMAND_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "$PARAMETERS" \
+              --query "Command.CommandId" \
+              --output text)
+
+            echo "Waiting for deployment command $COMMAND_ID"
+
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID"
+
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" \
+              --output text)
+
+            echo "Deployment status: $STATUS"
+
+            if [ "$STATUS" != "Success" ]; then
+              echo "Deployment failed on $INSTANCE_ID"
+              exit 1
+            fi
+
+            echo "$INSTANCE_ID deployed successfully"
+          done
+
+      - name: Deployment completed
+        run: echo "Rolling deployment completed successfully"
